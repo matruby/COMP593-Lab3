@@ -2,12 +2,30 @@
 import os
 import sys # {REQ-1}
 import pandas as pd
-import datetime
+from datetime import datetime
 
 def main():
     """Main program function"""
+    global data_sales_path
     data_sales_path = sys.argv # csv path variable
 
+    # Ensure the input for the path is valid
+    csv_path = valid_input(data_sales_path[1])
+
+    # Dataframe object of Main CSV
+    sales_df = pd.read_csv(csv_path)
+    a_dates = all_dates(sales_df) 
+    
+    # Re load the CSV
+    sales_df = pd.read_csv(csv_path)
+    # Seperate the dates
+    for date in a_dates:
+        split_date = date.split(',')
+        date_form1 = f'{int(split_date[1])}/{int(split_date[2])}/{split_date[0]}'
+        date_form2 = f'{split_date[0]}-{split_date[1]}-{split_date[2]}'
+        specific_df = sales_df.loc[sales_df['ORDER DATE'] == date_form1]
+        print(file_mod_and_write(specific_df, date_form2))
+        
     return None
 
 
@@ -27,21 +45,20 @@ def valid_input(file_path):
             \n\tIf you have encountered an input error please retry!")
         sys.exit()
 
-    elif valid_path and valid_path[-4:] == '.csv':
+    elif valid_path and file_path[-4:] == '.csv':
         return file_path
 
-def all_dates(path_of_csv):
+def all_dates(df):
     """Creates a list of all dates from the files with no dupes""" 
     # Convert the csv to to a dataframe
-    sales_data_df = pd.read_csv(path_of_csv[1]) 
     # Normalize the datetime so you can just take the exact date
-    sales_data_df['ORDER DATE'] = pd.to_datetime(sales_data_df['ORDER DATE'])
-    sales_data_df['ORDER DATE'] = sales_data_df['ORDER DATE'].dt.date
+    df['ORDER DATE'] = pd.to_datetime(df['ORDER DATE'])
+    df['ORDER DATE'] = df['ORDER DATE'].dt.date
     # Sort the dates inplace from oldest to new
-    sales_data_df.sort_values(by='ORDER DATE', inplace=True)
+    df.sort_values(by='ORDER DATE', inplace=True)
 
     # Convert the dates to a list 
-    date_list = sales_data_df['ORDER DATE'].tolist()
+    date_list = df['ORDER DATE'].tolist()
     # Store dates in the proper date
     proper_format = [date.strftime("%Y,%m,%d") for date in date_list]
 
@@ -51,10 +68,42 @@ def all_dates(path_of_csv):
     
     return no_dupes
 
+def file_mod_and_write(df, order_date):
+    """Assign all the proper formatting and then writing to each file"""
+    # Get rid of the columns that aren't needed
+    # Sort the Dataframe by the item number in ascending order
+    df = ascending_itm_num(df)
+    # Add a new column called TOTAL PRICE which is the total of each order
+    df = order_total(df)
+    # Add dollar signs to the ITEM PRICE column
+    df = add_dollar_signs(df) 
 
+    # Create the correct directory
+    parent_path = data_sales_path[1]
+    file_path = create_folder(order_date, parent_path)
+    
+    del df['ORDER ID']
+    del df['ADDRESS']
+    del df['CITY']
+    del df['STATE']
+    del df['POSTAL CODE']
+    del df['COUNTRY']
+    # Write the Dataframe to an excel file 
+    write_excel(df, order_date, file_path)
+
+    return f'* Order_{order_date} folder created \n * {order_date}.xlsx created'
+
+# {REQ-8}
+def ascending_itm_num(df):
+    """Arrange the df by item numbers"""
+    df.sort_values(by='ITEM NUMBER')
+    return df
+
+# {REQ-9} and {REQ-10}
 def order_total(df):
     """Used to find the total cost of order and grand total"""
-    # Value for the grand total
+    # Drop the columns that aren't needed
+    df.drop(columns=['ORDER ID', 'ADDRESS', 'CITY', 'STATE', 'POSTAL CODE', 'COUNTRY'])
     g_total = 0
     # List to hold the total cost per order
     total_lst = []
@@ -73,8 +122,6 @@ def order_total(df):
     # Insert all the totals in the new column
     df.insert(7, 'TOTAL PRICE', total_lst)
 
-    # Add the final row by creating a df and adding it to the
-    # main df.
     final_row = pd.DataFrame({'ITEM PRICE':['GRAND TOTAL'], 
         'TOTAL PRICE':[f'${g_total:,}']})
     df = pd.concat([df, final_row], ignore_index=True, axis=0)
@@ -82,8 +129,12 @@ def order_total(df):
     df['ORDER ID'] = df['ORDER ID'].astype('Int32')
     df['ITEM NUMBER'] = df['ITEM NUMBER'].astype('Int32')
     df['ITEM QUANTITY'] = df['ITEM QUANTITY'].astype('Int32')
+
+
+
     return df
 
+# {REQ-11}
 def add_dollar_signs(df):
     """Add dollar signs to Item Price"""
     for ent in range(len(df)):
@@ -92,7 +143,49 @@ def add_dollar_signs(df):
 
     return df 
 
+# {REQ-12} 
+def write_excel(order_df, order_date, order_path):
+    """Convert the data frame to an excel file and properly format it"""
+    # Set the path to save the file to 
+    order_path += f'\\{order_date}.xlsx'
+    # Create a worksheet to make edits to the file
+    writer = pd.ExcelWriter(order_path, engine='xlsxwriter')
+    # Create the Excel object
+    order_df.to_excel(writer, sheet_name='Order Info', index=False)
+    # Create a .book and allow it to be edited 
+    workbook = writer.book
+    worksheet = writer.sheets['Order Info']
+    # Format the file correctly
+    worksheet.set_column(0, 0, 11)
+    worksheet.set_column(1, 1, 13)
+    worksheet.set_column(2, 5, 15)
+    worksheet.set_column(6, 7, 13)
+    worksheet.set_column(8, 8, 10)
+    worksheet.set_column(9, 9, 35)
+    # Save the excel file
+    writer.close()
 
+# {REQ - 5}
+def create_folder(order_date, parent_path): 
+    """Create all of the order_folders"""
+    print(order_date)
+    # Directory we're going to be adding the subdirectories to 
+    split_path = parent_path.split('\\')
+    s_path_len = len(split_path)
+    # Remove the file and just have the raw path to the csv
+    final_path = "\\".join(split_path[:s_path_len - 1])
+    
+    parent_dir = f'{final_path}\\Orders\\'
+    # Properly format the date
+    split_date = order_date.split(',')
+    proper_date = '-'.join(split_date)
+    current_dir_name = f'Orders_{proper_date}'
+    # Join the individual dirs with the parent dir 
+    final_path = parent_dir + current_dir_name 
+    # make the directory
+    os.makedirs(final_path)
+    
+    return final_path
 
 if __name__ == '__main__':
     main()
