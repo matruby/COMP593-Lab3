@@ -6,16 +6,15 @@ from datetime import datetime
 
 def main():
     """Main program function"""
-    global data_sales_path
-    data_sales_path = sys.argv # csv path variable
-
+    data_sales_path = sys.argv 
     # Ensure the input for the path is valid
-    csv_path = valid_input(data_sales_path[1])
-
+    csv_path = data_sales_path[1]
+    # Make sure that the path is valid
+    valid_input(data_sales_path)
     # Dataframe object of Main CSV
     sales_df = pd.read_csv(csv_path)
-    a_dates = all_dates(sales_df) 
-    
+    # Get all the dates for the files with no dupes
+    a_dates = all_dates(sales_df)  
     # Re load the CSV
     sales_df = pd.read_csv(csv_path)
     # Seperate the dates
@@ -24,29 +23,26 @@ def main():
         date_form1 = f'{int(split_date[1])}/{int(split_date[2])}/{split_date[0]}'
         date_form2 = f'{split_date[0]}-{split_date[1]}-{split_date[2]}'
         specific_df = sales_df.loc[sales_df['ORDER DATE'] == date_form1]
-        print(file_mod_and_write(specific_df, date_form2))
+        print(file_mod_and_write(specific_df, csv_path, date_form2))
         
     return None
 
 
 def valid_input(file_path):
     """Ensures the path is passed as an arg and is a valid path"""
-    if len(data_sales_path) <= 1: # {REQ-2} 
+    if len(file_path) <= 1:  
         # Error message to user
         print('\tAn incorrect path has been used. \
         \n\tPlease re-run this script with a valid system path!')
         sys.exit()
 
-    valid_path = os.path.exists(data_sales_path[1])
-    if not valid_path: # {REQ-3}
+    valid_path = os.path.exists(file_path[1])
+    if not valid_path: 
         # Error message to user
         print(f"\tUnfortunately the path '{data_sales_path[1]}' \
             \tisn't a valid path. Verify that this is the correct path.\
             \n\tIf you have encountered an input error please retry!")
         sys.exit()
-
-    elif valid_path and file_path[-4:] == '.csv':
-        return file_path
 
 def all_dates(df):
     """Creates a list of all dates from the files with no dupes""" 
@@ -56,32 +52,27 @@ def all_dates(df):
     df['ORDER DATE'] = df['ORDER DATE'].dt.date
     # Sort the dates inplace from oldest to new
     df.sort_values(by='ORDER DATE', inplace=True)
-
     # Convert the dates to a list 
     date_list = df['ORDER DATE'].tolist()
     # Store dates in the proper date
     proper_format = [date.strftime("%Y,%m,%d") for date in date_list]
-
     # Remove the duplicates
     no_dupes = []
     [no_dupes.append(entry) for entry in proper_format if entry not in no_dupes]
     
     return no_dupes
 
-def file_mod_and_write(df, order_date):
+def file_mod_and_write(df, file_path, order_date):
     """Assign all the proper formatting and then writing to each file"""
-    # Get rid of the columns that aren't needed
-    # Sort the Dataframe by the item number in ascending order
-    df = ascending_itm_num(df)
-    # Add a new column called TOTAL PRICE which is the total of each order
     df = order_total(df)
     # Add dollar signs to the ITEM PRICE column
     df = add_dollar_signs(df) 
-
     # Create the correct directory
-    parent_path = data_sales_path[1]
+    parent_path = file_path
     file_path = create_folder(order_date, parent_path)
-    
+    # Sort the Dataframe by the item number in ascending order
+    df = ascending_itm_num(df) 
+    # Deleted the columns that weren't needed
     del df['ORDER ID']
     del df['ADDRESS']
     del df['CITY']
@@ -96,8 +87,8 @@ def file_mod_and_write(df, order_date):
 # {REQ-8}
 def ascending_itm_num(df):
     """Arrange the df by item numbers"""
-    df.sort_values(by='ITEM NUMBER')
-    return df
+    new_df = df.sort_values(by='ITEM NUMBER')
+    return new_df
 
 # {REQ-9} and {REQ-10}
 def order_total(df):
@@ -121,7 +112,7 @@ def order_total(df):
 
     # Insert all the totals in the new column
     df.insert(7, 'TOTAL PRICE', total_lst)
-
+    # Create the final row
     final_row = pd.DataFrame({'ITEM PRICE':['GRAND TOTAL'], 
         'TOTAL PRICE':[f'${g_total:,}']})
     df = pd.concat([df, final_row], ignore_index=True, axis=0)
@@ -130,11 +121,8 @@ def order_total(df):
     df['ITEM NUMBER'] = df['ITEM NUMBER'].astype('Int32')
     df['ITEM QUANTITY'] = df['ITEM QUANTITY'].astype('Int32')
 
-
-
     return df
 
-# {REQ-11}
 def add_dollar_signs(df):
     """Add dollar signs to Item Price"""
     for ent in range(len(df)):
@@ -142,8 +130,7 @@ def add_dollar_signs(df):
         df.at[ent, 'ITEM PRICE']=f'${price}'
 
     return df 
-
-# {REQ-12} 
+ 
 def write_excel(order_df, order_date, order_path):
     """Convert the data frame to an excel file and properly format it"""
     # Set the path to save the file to 
@@ -165,16 +152,14 @@ def write_excel(order_df, order_date, order_path):
     # Save the excel file
     writer.close()
 
-# {REQ - 5}
 def create_folder(order_date, parent_path): 
     """Create all of the order_folders"""
-    print(order_date)
     # Directory we're going to be adding the subdirectories to 
     split_path = parent_path.split('\\')
     s_path_len = len(split_path)
     # Remove the file and just have the raw path to the csv
     final_path = "\\".join(split_path[:s_path_len - 1])
-    
+ 
     parent_dir = f'{final_path}\\Orders\\'
     # Properly format the date
     split_date = order_date.split(',')
