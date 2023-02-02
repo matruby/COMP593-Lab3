@@ -37,7 +37,8 @@ def valid_input(file_path):
         sys.exit()
 
     valid_path = os.path.exists(file_path[1])
-    if not valid_path: 
+    valid_file = os.path.isfile(file_path[1])
+    if not valid_path and not valid_file: 
         # Error message to user
         print(f"\tUnfortunately the path '{data_sales_path[1]}' \
             \tisn't a valid path. Verify that this is the correct path.\
